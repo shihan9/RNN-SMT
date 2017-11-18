@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-python modifier.py word2idx_file 15 num_files_to_be_modified file1, file2...
+python unker.py word2idx_file 15 num_files_to_be_unked file1, file2...
 """
 
 import sys
@@ -25,9 +25,6 @@ def main():
                 for j in range(len(words)):
                     if words[j] not in vcb:
                         words[j] = '*UNK*'
-                if len(set(words)) == 1 and words[0] == '*UNK*':
-                    continue
-                words = words + ['*EOS*'] + ['*PAD*'] * (max_len - len(words))
                 corpus.append(" ".join(words) + "\n")
         with open(sys.argv[4 + i] + '.mod', 'w') as f:
             f.writelines(corpus)
