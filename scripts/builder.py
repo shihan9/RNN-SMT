@@ -10,7 +10,7 @@ def main():
     lang = sys.argv[2]
     num_files = int(sys.argv[3])
     counter = Counter()
-    vcb = {'*PAD*': 0, '*EOS*': 1, '*UNK*': 2}
+    vcb = {'*PAD*': 0, '*SOS*': 1, '*EOS*': 2, '*UNK*': 3}
 
     for i in range(num_files):
         with open(sys.argv[4 + i], 'r') as f:
