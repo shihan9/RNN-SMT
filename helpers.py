@@ -79,7 +79,6 @@ class Dataloader(object):
                     random.shuffle(indices)
                 idx_in_epoch = batch_size - self.size + idx_in_epoch
                 subset = slice(0, idx_in_epoch)
-                print remained, subset
                 subset = remained + indices[subset]
 
                 src_seq = [self.src[i][:] for i in subset]
