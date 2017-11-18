@@ -27,11 +27,19 @@ class RNNencdec(object):
             src_seqlen = tf.placeholder(tf.int32, [batch_size])
             cell = tf.contrib.rnn.GRUCell(rnn_size)
             init_state = cell.zero_state(batch_size, tf.float32)
-            outputs, context = tf.nn.dynamic_rnn(
+            outputs, final_state = tf.nn.dynamic_rnn(
                 cell,
                 embedded,
                 sequence_length=src_seqlen,
                 initial_state=init_state)
+
+        # transform
+        V = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
+        Vb = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
+        context = tf.nn.tanh(tf.matmul(V, final_state) + Vb)  # shape [BATCH_SIZE, RNN_SIZE]
+        V_prime = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
+        Vb_prime = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
+        context = tf.nn.tanh(tf.matmul(V_prime, context) + Vb_prime)
 
         # decoder
         with tf.variable_scope("decoder"):
@@ -46,11 +54,9 @@ class RNNencdec(object):
             helper = tf.contrib.seq2seq.TrainingHelper(embedded, tgt_seqlen)
             decoder = tf.contrib.seq2seq.BasicDecoder(cell, helper, context)
             outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
-            weights = tf.Variable(
-                tf.random_normal([rnn_size, tgt_vocab_size], stddev=.1))
-            bias = tf.Variable(tf.random_normal([tgt_vocab_size], stddev=.1))
-            logits = tf.tensordot(outputs.rnn_output, weights,
-                                  [[2], [0]]) + bias
+            W = tf.Variable(tf.random_normal([rnn_size, tgt_vocab_size], stddev=.1))
+            Wb = tf.Variable(tf.random_normal([tgt_vocab_size], stddev=.1))
+            logits = tf.tensordot(outputs.rnn_output, W, [[2], [0]]) + Wb
 
         tgt_labels = tf.placeholder(tf.int32, [batch_size, None])
         masks = tf.sequence_mask(tgt_seqlen, None, dtype=tf.float32)
