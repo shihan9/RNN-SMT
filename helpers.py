@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import copy
+from builtins import map
 
 
 class Dataloader(object):
@@ -53,13 +54,13 @@ class Dataloader(object):
                 subset = indices[subset]
 
                 src_seq = [self.src[i][:] for i in subset]
-                src_seqlen = map(lambda x: len(x) + 1, src_seq)
+                src_seqlen = list(map(lambda x: len(x) + 1, src_seq))
                 src_maxlen = max(src_seqlen)
                 self._padding(src_seq, 'SRC', src_maxlen)
 
                 tgt_seq_inputs = [self.tgt[i][:] for i in subset]
                 tgt_seq_labels = copy.deepcopy(tgt_seq_inputs)
-                tgt_seqlen = map(lambda x: len(x) + 1, tgt_seq_inputs)
+                tgt_seqlen = list(map(lambda x: len(x) + 1, tgt_seq_inputs))
                 tgt_maxlen = max(tgt_seqlen)
 
                 self._padding(tgt_seq_inputs, 'TGT_INPUTS', tgt_maxlen)
@@ -82,18 +83,18 @@ class Dataloader(object):
                 subset = remained + indices[subset]
 
                 src_seq = [self.src[i][:] for i in subset]
-                src_seqlen = map(lambda x: len(x) + 1, src_seq)
+                src_seqlen = list(map(lambda x: len(x) + 1, src_seq))
                 src_maxlen = max(src_seqlen)
                 self._padding(src_seq, 'SRC', src_maxlen)
 
                 tgt_seq_inputs = [self.tgt[i][:] for i in subset]
                 tgt_seq_labels = copy.deepcopy(tgt_seq_inputs)
-                tgt_seqlen = map(lambda x: len(x) + 1, tgt_seq_inputs)
+                tgt_seqlen = list(map(lambda x: len(x) + 1, tgt_seq_inputs))
                 tgt_maxlen = max(tgt_seqlen)
                 self._padding(tgt_seq_inputs, 'TGT_INPUTS', tgt_maxlen)
                 self._padding(tgt_seq_labels, 'TGT_LABELS', tgt_maxlen)
 
-            yield map(np.array, (src_seq, tgt_seq_inputs, tgt_seq_labels, src_seqlen, tgt_seqlen))
+            yield list(map(np.array, (src_seq, tgt_seq_inputs, tgt_seq_labels, src_seqlen, tgt_seqlen)))
 
     # padding one batch with *EOS* *SOS* *PAD*
     def _padding(self, subset, flag, maxlen):
