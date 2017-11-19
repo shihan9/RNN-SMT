@@ -6,9 +6,13 @@ class RNNencdec(object):
 
     def __init__(self, data, params):
         data = data
-        batch_size = params.batch_size
+        sos = data.sos
+        eos = data.eos
+        src_vocab_table = data.src_word2idx
+        tgt_vocab_table = data.tgt_word2idx
         src_vocab_size = data.src_vocab_size
         tgt_vocab_size = data.tgt_vocab_size
+        batch_size = params.batch_size
         phase = params.phase
         rnn_size = params.rnn_size
         embed_size = params.embed_size
@@ -33,16 +37,17 @@ class RNNencdec(object):
                 sequence_length=src_seqlen,
                 initial_state=init_state)
 
-        # transform
-        V = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
-        Vb = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
-        context = tf.nn.tanh(tf.matmul(V, final_state) + Vb)  # shape [BATCH_SIZE, RNN_SIZE]
-        V_prime = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
-        Vb_prime = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
-        context = tf.nn.tanh(tf.matmul(V_prime, context) + Vb_prime)
+            # transform
+            V = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
+            Vb = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
+            context = tf.nn.tanh(tf.matmul(V, final_state) + Vb)  # shape [BATCH_SIZE, RNN_SIZE]
 
         # decoder
         with tf.variable_scope("decoder"):
+            V_prime = tf.Variable(tf.random_normal([batch_size, batch_size], stddev=0.1))
+            Vb_prime = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
+            init_state = tf.nn.tanh(tf.matmul(V_prime, context) + Vb_prime)
+
             tgt_inputs = tf.placeholder(tf.int32, [batch_size, None])
             # embedding lookup layer
             embeddings = tf.Variable(
@@ -51,8 +56,18 @@ class RNNencdec(object):
             # decoding
             tgt_seqlen = tf.placeholder(tf.int32, [batch_size])
             cell = tf.contrib.rnn.GRUCell(rnn_size)
-            helper = tf.contrib.seq2seq.TrainingHelper(embedded, tgt_seqlen)
-            decoder = tf.contrib.seq2seq.BasicDecoder(cell, helper, context)
+            if phase == 'TRAIN':
+                max_time = tf.reduce_max(tgt_seqlen)
+                tiled_context = tf.reshape(tf.tile(context, [1, max_time]), [batch_size, max_time, rnn_size])
+                concat_inputs = tf.concat([embedded, tiled_context], 2)
+                helper = tf.contrib.seq2seq.TrainingHelper(concat_inputs, tgt_seqlen)
+            elif phase == 'DEV':
+                def _embedding_fn(ids):
+                    predicted_inputs = tf.nn.embedding_lookup(embeddings, ids)
+                    concat_inputs = tf.concat([predicted_inputs, context], 1)
+                    return concat_inputs
+                helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(_embedding_fn, np.array([sos] * batch_size, dtype=np.int32), eos)
+            decoder = tf.contrib.seq2seq.BasicDecoder(cell, helper, init_state)
             outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
             W = tf.Variable(tf.random_normal([rnn_size, tgt_vocab_size], stddev=.1))
             Wb = tf.Variable(tf.random_normal([tgt_vocab_size], stddev=.1))
@@ -109,3 +124,6 @@ class RNNencdec(object):
             print(total_accu / num_batch * 100)
         elif phase == 'TEST':
             pass
+
+
+
