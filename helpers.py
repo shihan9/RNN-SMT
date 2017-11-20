@@ -94,16 +94,21 @@ class Dataloader(object):
                 self._padding(tgt_seq_inputs, 'TGT_INPUTS', tgt_maxlen)
                 self._padding(tgt_seq_labels, 'TGT_LABELS', tgt_maxlen)
 
-            yield list(map(np.array, (src_seq, tgt_seq_inputs, tgt_seq_labels, src_seqlen, tgt_seqlen)))
+            yield list(
+                map(np.array, (src_seq, tgt_seq_inputs, tgt_seq_labels,
+                               src_seqlen, tgt_seqlen)))
 
     # padding one batch with *EOS* *SOS* *PAD*
     def _padding(self, subset, flag, maxlen):
         for sentence in subset:
             if flag == 'SRC':
-                sentence[:] = sentence + [self.eos] + [self.pad] * (maxlen - len(sentence) - 1)
+                sentence[:] = sentence + [self.eos] + [self.pad] * (
+                    maxlen - len(sentence) - 1)
             elif flag == 'TGT_INPUTS':
-                sentence[:] = [self.sos] + sentence + [self.pad] * (maxlen - len(sentence) - 1)
+                sentence[:] = [self.sos] + sentence + [self.pad] * (
+                    maxlen - len(sentence) - 1)
             elif flag == 'TGT_LABELS':
-                sentence[:] = sentence + [self.eos] + [self.pad] * (maxlen - len(sentence) - 1)
+                sentence[:] = sentence + [self.eos] + [self.pad] * (
+                    maxlen - len(sentence) - 1)
             else:
                 print("Wrong Flag")
