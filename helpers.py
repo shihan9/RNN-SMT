@@ -16,10 +16,10 @@ class Dataloader(object):
     def read_data(self, src_data, tgt_data):
         src = []
         tgt = []
-        with open(src_data, 'r', encoding='utf8') as f:
+        with open(src_data, 'r') as f:
             for line in f:
                 src.append([int(x) for x in line.split()])
-        with open(tgt_data, 'r', encoding='utf8') as f:
+        with open(tgt_data, 'r') as f:
             for line in f:
                 tgt.append([int(x) for x in line.split()])
         self.src = src
@@ -30,11 +30,11 @@ class Dataloader(object):
     def read_table(self, src_table, tgt_table):
         self.src_word2idx = {}
         self.tgt_word2idx = {}
-        with open(src_table, 'r', encoding='utf8') as f:
+        with open(src_table, 'r') as f:
             for line in f:
                 word, index = line.split()
                 self.src_word2idx[word] = int(index)
-        with open(tgt_table, 'r', encoding='utf8') as f:
+        with open(tgt_table, 'r') as f:
             for line in f:
                 word, index = line.split()
                 self.tgt_word2idx[word] = int(index)
