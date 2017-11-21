@@ -13,7 +13,7 @@ def main():
         'Params',
         ['batch_size', 'embed_size', 'rnn_size', 'alpha', 'phase', 'num_epoch'])
 
-    data = Dataloader('data/hansard/dev.fr', 'data/hansard/dev.en',
+    data = Dataloader('data/hansard/train.fr', 'data/hansard/train.en',
                       'data/hansard/word2idx.fr', 'data/hansard/word2idx.en')
     mparams = Params(20, 30, 64, 1e-3, 'TRAIN', 1)
     with tf.Graph().as_default():
