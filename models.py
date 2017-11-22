@@ -42,17 +42,17 @@ class RNNencdec(object):
 
             with tf.name_scope("context"):
                 weights = tf.Variable(
-                    tf.random_normal([batch_size, batch_size], stddev=0.1))
+                    tf.random_normal([rnn_size, rnn_size], stddev=0.1))
                 biases = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
-                context = tf.nn.tanh(tf.matmul(weights, final_state) + biases)
+                context = tf.nn.tanh(tf.matmul(final_state, weights) + biases)
 
         # decoder
         with tf.name_scope("decoder"):
             with tf.name_scope("init_state"):
                 weights = tf.Variable(
-                    tf.random_normal([batch_size, batch_size], stddev=0.1))
+                    tf.random_normal([rnn_size, rnn_size], stddev=0.1))
                 biases = tf.Variable(tf.random_normal([rnn_size], stddev=0.1))
-                init_state = tf.nn.tanh(tf.matmul(weights, context) + biases)
+                init_state = tf.nn.tanh(tf.matmul(context, weights) + biases)
 
             embeddings = tf.Variable(
                 tf.random_normal((tgt_vocab_size, embed_size), stddev=.1))
