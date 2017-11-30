@@ -4,4 +4,4 @@ data/
 __pycache__/
 checkpoint
 model.ckpt.*
-
+.idea/
