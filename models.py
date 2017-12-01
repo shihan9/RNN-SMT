@@ -195,7 +195,7 @@ class RNNsearch(object):
         src_seqlen = tf.placeholder(tf.int32, [batch_size])
         src_max_time = tf.reduce_max(src_seqlen)
         tgt_seqlen = tf.placeholder(tf.int32, [batch_size])
-        tgt_max_time = tf.reduce_max(src_seqlen)
+        tgt_max_time = tf.reduce_max(tgt_seqlen)
         keep_prob = tf.placeholder(tf.float32)
 
         # parameters for prediction
@@ -222,7 +222,7 @@ class RNNsearch(object):
                                                                       initial_state_fw=init_state_fw,
                                                                       initial_state_bw=init_state_bw)
             encode_outputs = tf.concat(bi_outputs, -1)
-            encode_outputs_bw_first = bi_outputs[1][0]  # TODO double check
+            encode_outputs_bw_first = bi_outputs[1][:, 0, :]  # TODO double check
         
         # decode
         with tf.variable_scope("decode"):
@@ -246,8 +246,6 @@ class RNNsearch(object):
 
             def compute_attention(state):
                 ws = tf.matmul(state, wa_weights) + wa_biases  # [batch_size, alignment_size]
-                print ws.get_shape()
-                print tf.tile(ws, [1, src_max_time]).get_shape()
                 tiled_ws = tf.reshape(tf.tile(ws, [1, src_max_time]), [batch_size, src_max_time, alignment_size])  # [batch_size, src_max_time, alignment_size]
                 uh = tf.tensordot(encode_outputs, ua_weights, [[2], [0]]) + ua_biases  # [batch_size, src_max_time, alignment_size]
                 e = tf.reshape(tf.tensordot(tf.tanh(tiled_ws + uh), va_weights, [[2], [0]]) + va_biases, [batch_size, src_max_time])  # [batch_size, src_max_time]
@@ -278,8 +276,9 @@ class RNNsearch(object):
                     else:
                         next_cell_state = cell_state
                     # next_input
-                    next_input = tf.cond(finished, lambda: tf.zeros([batch_size, embed_size+2*rnn_size], dtype=tf.float32),
-                                                   lambda: get_next_input(next_cell_state))  # TODO double check that pad and zero have the same effect
+                    next_input = tf.cond(finished,
+                                         lambda: tf.zeros([batch_size, embed_size+2*rnn_size], dtype=tf.float32),
+                                         lambda: get_next_input(next_cell_state))  # TODO double check that pad and zero have the same effect
                     # emit_output and next_loop_state
                     emit_output = cell_output
                     next_loop_state = None
@@ -293,8 +292,9 @@ class RNNsearch(object):
                 loss = tf.contrib.seq2seq.sequence_loss(logits, tgt_labels, tf.sequence_mask(tgt_seqlen, tgt_max_time, dtype=tf.float32))
                 trainer = tf.train.AdamOptimizer(alpha).minimize(loss)
 
-            elif phase == 'TEST':
+            elif phase == 'DEV':
                 index_pad = tf.fill([batch_size], pad)
+                index_sos = tf.fill([batch_size], sos)
 
                 # define loop function for testing
                 def loop_fn_test(time, cell_output, cell_state, loop_state):
@@ -305,37 +305,52 @@ class RNNsearch(object):
                         tiled_attentions = tf.transpose(tf.reshape(tf.tile(attentions, [1, 2 * rnn_size]), [batch_size, 2 * rnn_size, src_max_time]), [0, 2, 1])
                         context = encode_outputs * tiled_attentions  # element-wise multiply, [batch_size, src_max_time, 2 * rnn_size]
                         context = tf.reduce_sum(context, axis=1)
-                        return tf.concat([inputs, context], 1) 
+                        return tf.concat([inputs, context], 1)
 
                     # elements_finished
-                    elements_finished = (time >= 2 * src_max_time)
+                    elements_finished = (tf.cast(time, tf.int32) >= 2 * src_max_time)
                     finished = tf.reduce_all(elements_finished)
-                    # next_cell_state
+                    # two branches
                     if cell_output is None:
                         next_cell_state = tf.matmul(encode_outputs_bw_first, init_weights) + init_biases  # [batch_size, rnn_size]
+                        next_input = get_next_input(index_sos, next_cell_state)
+                        next_loop_state = tf.zeros([batch_size], dtype=tf.bool)
                     else:
                         next_cell_state = cell_state
-                    # next_input
-                    if finished:
-                        next_input = tf.zeros([batch_size, embed_size+2*rnn_size], dtype=tf.float32)  # TODO double check that pad and zero have the same effect
-                    elif time > 0:
                         next_logits = tf.matmul(cell_output, weights) + biases
-                        next_predictions = tf.argmax(next_logits, axis=1)
-                        next_predictions = (next_predictions * tf.logical_not(loop_state)) + (loop_state * pad)  # use pad as input based on loop_state
+                        next_predictions = tf.argmax(next_logits, axis=1, output_type=tf.int32)
+                        next_predictions = (next_predictions * tf.cast(tf.logical_not(loop_state), tf.int32)) + (tf.cast(loop_state, tf.int32) * pad)  # use pad as input based on loop_state
                         next_input = get_next_input(next_predictions, next_cell_state)
-                    else:  # time == 0
-                        next_input = get_next_input(sos, next_cell_state)
+                        next_loop_state = tf.logical_or(loop_state, tf.equal(next_predictions, index_pad))
                     # emit_output
                     emit_output = cell_output
-                    # next_loop_state
-                    if loop_state is None:
-                        next_loop_state = tf.zeros([batch_size], dtype=tf.bool)
-                    elif not finished:
-                        next_loop_state = tf.logical_or(loop_state, tf.equal(next_predictions, index_pad))
-                        if tf.reduce_all(next_loop_state):  # stop earlier
-                            elements_finished = (time == time)
-                    else:
-                        next_loop_state = elements_finished
+                    # elements_finished, stop earlier
+                    elements_finished = tf.cond(tf.logical_and(tf.logical_not(finished), tf.reduce_all(next_loop_state)),
+                                                lambda: (time == time),
+                                                lambda: elements_finished)
+                    # # next_cell_state
+                    # if cell_output is None:
+                    #     next_cell_state = tf.matmul(encode_outputs_bw_first, init_weights) + init_biases  # [batch_size, rnn_size]
+                    # else:
+                    #     next_cell_state = cell_state
+                    # # next_input
+                    # next_input = tf.cond(finished,
+                    #                      lambda: tf.zeros([batch_size, embed_size+2*rnn_size], dtype=tf.float32),  # TODO double check that pad and zero have the same effect
+                    #                      lambda: tf.cond(tf.equal(time, 0),
+                    #                                      lambda: get_next_input(index_sos, next_cell_state),
+                    #                                      lambda: get_next_input(get_next_prediction(), next_cell_state)))
+                    # # emit_output
+                    # emit_output = cell_output
+                    # # next_loop_state
+                    # if loop_state is None:
+                    #     next_loop_state = tf.zeros([batch_size], dtype=tf.bool)
+                    # else:
+                    #     next_loop_state = tf.cond(finished, lambda: elements_finished,
+                    #                                         lambda: tf.logical_or(loop_state, tf.equal(get_next_prediction(), index_pad)))
+                    # # elements_finished, stop earlier
+                    # elements_finished = tf.cond(finished, lambda: elements_finished,
+                    #                                       lambda: tf.cond(tf.reduce_all(next_loop_state), lambda: (time == time),
+                    #                                                                                       lambda: elements_finished))
                     return elements_finished, next_input, next_cell_state, emit_output, next_loop_state
 
                 decode_outputs_ta, _, _ = tf.nn.raw_rnn(cell, loop_fn_test)
@@ -370,13 +385,34 @@ class RNNsearch(object):
 
         elif phase == 'DEV':
             saver.restore(session, './model.ckpt')
-            pass
+
+            num_batch = 0
+            total_dist = 0
+            for batch in data.next_batch(batch_size, num_epoch):
+                tmp, _, _, _ = session.run(
+                    [distance, self.out1, self.out2, self.out3],
+                    feed_dict={
+                        src_inputs: batch[0],
+                        tgt_inputs: batch[1],
+                        tgt_labels: batch[2],
+                        src_seqlen: batch[3],
+                        tgt_seqlen: batch[4],
+                        keep_prob: 1.0
+                    })
+                total_dist += tmp
+                num_batch += 1
+                print(num_batch)
+                # if num_batch == 2:
+                #     break
+            print(total_dist / num_batch)
             
         elif phase == 'TEST':
             saver.restore(session, './model.ckpt')
             pass
 
     def _edit_distance(self, samples, labels, seqlen):
+        samples = tf.cast(samples, tf.int64)
+        labels = tf.cast(labels, tf.int64)
         nonzero = tf.where(tf.not_equal(samples, 0))
         sparse_samples = tf.SparseTensor(nonzero,
                                          tf.gather_nd(samples, nonzero),

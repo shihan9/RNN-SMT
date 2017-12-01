@@ -24,7 +24,7 @@ def main():
 
     print("DEV")
     data.read_data('data/hansard/dev.fr', 'data/hansard/dev.en')
-    mparams = Params(20, 30, 64, 1e-3, 'DEV', 1)
+    mparams = Params(20, 30, 64, 64, 1e-3, 'DEV', 1)
     with tf.Graph().as_default():
         RNNsearch(data, mparams)
 
