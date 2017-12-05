@@ -19,7 +19,6 @@ class RNNsearch(object):
         self.embed_size = params.embed_size
         self.alpha = params.alpha
         self.num_epoch = params.num_epoch
-        self.maxout_size = params.maxout_size
 
         # data fed into graph
         self.src_inputs = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -31,7 +30,7 @@ class RNNsearch(object):
         self.tgt_max_time = tf.reduce_max(self.tgt_seqlen)
 
         # default initializer
-        init_op = tf.random_normal_initializer(stddev=0.01**2)
+        init_op = tf.random_normal_initializer(stddev=0.001)
         tf.get_variable_scope().set_initializer(init_op)
 
         # define graph
@@ -182,8 +181,7 @@ class RNNsearch(object):
                 self.alignment_size,
                 activation=tf.tanh,
                 kernel_initializer=tf.random_normal_initializer(
-                    stddev=0.001
-                    **2))  # [batch_size, src_max_time, alignment_size]
+                    stddev=0.00001))  # [batch_size, src_max_time, alignment_size]
             e = tf.squeeze(
                 tf.layers.dense(
                     e_tilde, 1, kernel_initializer=tf.zeros_initializer())
@@ -403,9 +401,10 @@ class RNNencdec(object):
                 outputs, _, _ = tf.contrib.seq2seq.dynamic_decode(decoder)
                 logits = output_layer.apply(outputs.rnn_output)
 
-                masks = tf.sequence_mask(self.tgt_seqlen, self.tgt_max_time, dtype=tf.float32)
-                loss = tf.contrib.seq2seq.sequence_loss(
-                    logits, self.tgt_labels, masks)
+                masks = tf.sequence_mask(
+                    self.tgt_seqlen, self.tgt_max_time, dtype=tf.float32)
+                loss = tf.contrib.seq2seq.sequence_loss(logits, self.tgt_labels,
+                                                        masks)
                 if self.phase == 'TRAIN':
                     opt = tf.train.AdamOptimizer(self.alpha)
                     trainer = opt.minimize(loss)
@@ -418,7 +417,9 @@ class RNNencdec(object):
                     return new_inputs
 
                 helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(
-                    _embedding_fn, tf.fill([self.batch_size], self.sos), end_token=self.eos)
+                    _embedding_fn,
+                    tf.fill([self.batch_size], self.sos),
+                    end_token=self.eos)
 
                 decoder = tf.contrib.seq2seq.BasicDecoder(
                     cell, helper, init_state, output_layer=output_layer)
@@ -428,6 +429,7 @@ class RNNencdec(object):
                     impute_finished=True)
                 sample_ids = outputs.sample_id
 
-                distance = edit_distance(sample_ids, self.tgt_labels, self.tgt_seqlen)
+                distance = edit_distance(sample_ids, self.tgt_labels,
+                                         self.tgt_seqlen)
 
         return loss, trainer, distance
