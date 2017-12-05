@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from helpers import edit_distance
+from helpers import edit_distance, draw_attentions
 
 
 class RNNsearch(object):
@@ -12,6 +12,8 @@ class RNNsearch(object):
         self.eos = data.eos
         self.src_vocab_size = data.src_vocab_size
         self.tgt_vocab_size = data.tgt_vocab_size
+        self.src_vocab_table = data.src_idx2word
+        self.tgt_vocab_table = data.tgt_idx2word
         self.batch_size = params.batch_size
         self.phase = params.phase
         self.rnn_size = params.rnn_size
@@ -19,6 +21,7 @@ class RNNsearch(object):
         self.embed_size = params.embed_size
         self.alpha = params.alpha
         self.num_epoch = params.num_epoch
+        self.draw = 10
 
         # data fed into graph
         self.src_inputs = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -81,15 +84,32 @@ class RNNsearch(object):
         self.saver.restore(self.session, './model.ckpt')
         num_batch = total_dist = 0
         for batch in self.data.next_batch(self.batch_size, 1):
-            tmp = self.session.run(
-                self.distance,
-                feed_dict={
-                    self.src_inputs: batch[0],
-                    self.tgt_inputs: batch[1],
-                    self.tgt_labels: batch[2],
-                    self.src_seqlen: batch[3],
-                    self.tgt_seqlen: batch[4],
-                })
+            if self.draw > 0:
+                tmp, attentions, predictions, distances = self.session.run(
+                    [
+                        self.distance, self.attentions, self.predictions,
+                        self.all_distances
+                    ],
+                    feed_dict={
+                        self.src_inputs: batch[0],
+                        self.tgt_inputs: batch[1],
+                        self.tgt_labels: batch[2],
+                        self.src_seqlen: batch[3],
+                        self.tgt_seqlen: batch[4],
+                    })
+                self.draw = draw_attentions(self.draw, self.src_vocab_table,
+                                            self.tgt_vocab_table, batch[0],
+                                            predictions, attentions, distances)
+            else:
+                tmp = self.session.run(
+                    self.distance,
+                    feed_dict={
+                        self.src_inputs: batch[0],
+                        self.tgt_inputs: batch[1],
+                        self.tgt_labels: batch[2],
+                        self.src_seqlen: batch[3],
+                        self.tgt_seqlen: batch[4],
+                    })
             total_dist += tmp
             num_batch += 1
         print(total_dist / num_batch)
@@ -158,17 +178,20 @@ class RNNsearch(object):
                     trainer = opt.apply_gradients(zip(clipped_g, v))
 
             if self.phase == 'TEST':
-                sample_ids, _ = self._dynamic_rnn_test(
+                sample_ids, _, attentions = self._dynamic_rnn_test(
                     cell, init_state, 2 * self.src_max_time,
-                    tf.fill([self.batch_size],
-                            self.sos), self.eos, embeddings, encoder_outputs)
-                distance = edit_distance(sample_ids, self.tgt_labels,
-                                         self.tgt_seqlen)
-
+                    tf.fill([self.batch_size], self.sos), self.eos, embeddings,
+                    encoder_outputs)
+                distance, all_distances = edit_distance(
+                    sample_ids, self.tgt_labels, self.tgt_seqlen)
+                if self.draw > 0:
+                    self.attentions = attentions
+                    self.all_distances = all_distances
+                    self.predictions = sample_ids
             return loss, trainer, distance
 
-    def _get_context(self, state, hidden):
-        with tf.name_scope("get_context"):
+    def _get_attention(self, state, hidden):
+        with tf.name_scope("get_attention"):
             tiled_state = tf.reshape(
                 tf.tile(state, [1, self.src_max_time]),
                 [self.batch_size, self.src_max_time,
@@ -180,13 +203,17 @@ class RNNsearch(object):
                 concated_states,
                 self.alignment_size,
                 activation=tf.tanh,
-                kernel_initializer=tf.random_normal_initializer(
-                    stddev=0.00001))  # [batch_size, src_max_time, alignment_size]
+                kernel_initializer=tf.random_normal_initializer(stddev=0.00001)
+            )  # [batch_size, src_max_time, alignment_size]
             e = tf.squeeze(
                 tf.layers.dense(
                     e_tilde, 1, kernel_initializer=tf.zeros_initializer())
             )  # [batch_size, src_max_time]
             attention = tf.nn.softmax(e)  # [batch_size, src_max_time]
+            return attention
+
+    def _get_context(self, attention, hidden):
+        with tf.name_scope("get_context"):
             tiled_attention = tf.transpose(
                 tf.reshape(
                     tf.tile(attention, [1, 2 * self.rnn_size]),
@@ -215,7 +242,8 @@ class RNNsearch(object):
 
             elements_finished = (time >= seqlen)
             finished = tf.reduce_all(elements_finished)
-            context = self._get_context(next_cell_state, encoder_outputs)
+            attention = self._get_attention(next_cell_state, encoder_outputs)
+            context = self._get_context(attention, encoder_outputs)
             embedded = tf.cond(
                 finished, lambda: tf.zeros([self.batch_size, self.embed_size]),
                 lambda: inputs_ta.read(time))
@@ -235,6 +263,9 @@ class RNNsearch(object):
                           end_token, embeddings, encoder_outputs):
 
         def loop_fn(time, cell_output, cell_state, loop_state):
+            """
+                loop_state: [attentions, last_finished]
+            """
             if cell_output is not None:
                 next_cell_state = cell_state
                 sample_ids = tf.argmax(
@@ -242,29 +273,51 @@ class RNNsearch(object):
                     axis=-1,
                     output_type=tf.int32)
                 emit_output = sample_ids
+                next_loop_state = loop_state
             else:
                 next_cell_state = init_state
                 sample_ids = start_token
                 emit_output = tf.constant(0, tf.int32)
+                next_loop_state = [
+                    tf.TensorArray(
+                        dtype=tf.float32,
+                        size=0,
+                        dynamic_size=True,
+                        element_shape=tf.TensorShape([self.batch_size, None])),
+                    tf.fill([self.batch_size], False)
+                ]
 
             # compute next input
             elements_finished = tf.equal(sample_ids, end_token)
             elements_finished = tf.logical_or(elements_finished,
                                               time >= max_iterations)
-            context = self._get_context(next_cell_state, encoder_outputs)
+            attention = self._get_attention(next_cell_state, encoder_outputs)
+            context = self._get_context(attention, encoder_outputs)
             embedded = tf.nn.embedding_lookup(embeddings, sample_ids)
             finished = tf.reduce_all(elements_finished)
             next_input = tf.cond(finished,
                                  lambda: tf.zeros([self.batch_size, self.embed_size + 2 * self.rnn_size], dtype=tf.float32),
                                  lambda: tf.concat([embedded, context], -1))
 
-            next_loop_state = None
+            # next_loop_state[1] is equal the finished vector maintained in raw_rnn,
+            # so the attentions we generated has the same generated_tgt_max_time as sample_ids
+            next_loop_state[1] = tf.logical_or(elements_finished,
+                                               next_loop_state[1])
+            next_loop_state = tf.cond(
+                tf.reduce_all(next_loop_state[1]), lambda: next_loop_state,
+                lambda: [next_loop_state[0].write(time, attention), next_loop_state[1]])
+
             return elements_finished, next_input, next_cell_state, emit_output, next_loop_state
 
-        sample_ids_ta, final_state, _ = tf.nn.raw_rnn(cell, loop_fn)
+        sample_ids_ta, final_state, loop_state = tf.nn.raw_rnn(cell, loop_fn)
         sample_ids = tf.transpose(sample_ids_ta.stack(),
-                                  [1, 0])  # [batch_size, expected_tgt_time]
-        return sample_ids, final_state
+                                  [1,
+                                   0])  # [batch_size, generated_tgt_max_time]
+        attentions = tf.transpose(
+            loop_state[0].stack(),
+            [1, 2, 0])  # [batch_size, src_max_time, generated_tgt_max_time]
+
+        return sample_ids, final_state, attentions
 
 
 class RNNencdec(object):
@@ -370,7 +423,7 @@ class RNNencdec(object):
                 embedded,
                 sequence_length=self.src_seqlen,
                 initial_state=init_state)
-        return outputs, final_state
+            return outputs, final_state
 
     def _decoder(self, encoder_outputs, final_state):
         with tf.name_scope("decoder"):
@@ -432,4 +485,4 @@ class RNNencdec(object):
                 distance = edit_distance(sample_ids, self.tgt_labels,
                                          self.tgt_seqlen)
 
-        return loss, trainer, distance
+            return loss, trainer, distance
