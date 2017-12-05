@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def edit_distance(self, samples, labels, seqlen):
+def edit_distance(samples, labels, seqlen):
     samples = tf.cast(samples, tf.int64)
     labels = tf.cast(labels, tf.int64)
     nonzero = tf.where(tf.not_equal(samples, 0))
