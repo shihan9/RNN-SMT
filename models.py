@@ -21,7 +21,7 @@ class RNNsearch(object):
         self.embed_size = params.embed_size
         self.alpha = params.alpha
         self.num_epoch = params.num_epoch
-        self.draw = 10
+        self.draw = 0
 
         # data fed into graph
         self.src_inputs = tf.placeholder(tf.int32, [self.batch_size, None])
@@ -148,7 +148,8 @@ class RNNsearch(object):
 
     def _decoder(self, encoder_outputs, bw_first):
         with tf.name_scope("decoder"):
-            init_state = tf.layers.dense(bw_first, self.rnn_size)
+            init_state = tf.layers.dense(
+                bw_first, self.rnn_size, activation=tf.nn.tanh)
 
             embeddings = tf.Variable(
                 tf.random_normal(
