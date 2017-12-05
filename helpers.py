@@ -15,7 +15,4 @@ def edit_distance(self, samples, labels, seqlen):
     distance = tf.edit_distance(sparse_samples, sparse_labels, normalize=False)
     average = tf.reduce_mean(
         tf.divide(distance, tf.cast(seqlen, dtype=tf.float32)))
-    # self.out1 = tf.Print(samples, [samples], summarize=20)
-    # self.out2 = tf.Print(labels, [labels], summarize=20)
-    # self.out3 = tf.Print(distance, [distance], summarize=20)
     return average

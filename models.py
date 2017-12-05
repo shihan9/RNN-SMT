@@ -198,11 +198,6 @@ class RNNsearch(object):
                 tiled_attention * hidden, axis=1)  # [batch_size, 2 * rnn_size]
             return context
 
-    # def _get_logits(self, state, embedded, context):
-    #     t_tilde = tf.layers.dense(state, 2 * self.maxout_size) + tf.layers.dense(embedded, 2 * self.maxout_size) + tf.layers.dense(context, 2 * self.maxout_size)  # [batch_size, 2 * maxout_size]
-    #     t = tf.reduce_max(tf.reshape(t_tilde, [self.batch_size, 2, self.maxout_size]), axis=1)  # [batch_size, maxout_size]
-    #     logits = tf.nn.softmax(tf.layers.dense(t, self.tgt_vocab_size))  # [batch_size, tgt_vocab_size]
-    #     return logits
     def _get_logits(self, outputs):
         logits = tf.layers.dense(outputs, self.tgt_vocab_size)
         return logits
@@ -230,7 +225,6 @@ class RNNsearch(object):
                                  lambda: tf.zeros([self.batch_size, self.embed_size + 2 * self.rnn_size], dtype=tf.float32),
                                  lambda: tf.concat([embedded, context], -1))
 
-            # logits = self._get_logits(next_cell_state, embedded, context)
             next_loop_state = None
             return elements_finished, next_input, next_cell_state, emit_output, next_loop_state
 
@@ -245,8 +239,6 @@ class RNNsearch(object):
         def loop_fn(time, cell_output, cell_state, loop_state):
             if cell_output is not None:
                 next_cell_state = cell_state
-                # sample_ids = loop_state
-                # emit_output = sample_ids
                 sample_ids = tf.argmax(
                     self._get_logits(cell_output),
                     axis=-1,
@@ -268,8 +260,6 @@ class RNNsearch(object):
                                  lambda: tf.zeros([self.batch_size, self.embed_size + 2 * self.rnn_size], dtype=tf.float32),
                                  lambda: tf.concat([embedded, context], -1))
 
-            # logits = self._get_logits(next_cell_state, embedded, context)
-            # next_loop_state = tf.argmax(logits, axis=-1, output_type=tf.int32)
             next_loop_state = None
             return elements_finished, next_input, next_cell_state, emit_output, next_loop_state
 
