@@ -28,7 +28,9 @@ class Dataloader(object):
 
     def read_table(self, src_table, tgt_table):
         self.src_word2idx = {}
+        self.src_idx2word = {}
         self.tgt_word2idx = {}
+        self.tgt_idx2word = {}
         with open(src_table, 'r') as f:
             for line in f:
                 word, index = line.split()
@@ -37,6 +39,10 @@ class Dataloader(object):
             for line in f:
                 word, index = line.split()
                 self.tgt_word2idx[word] = int(index)
+        for key, val in self.src_word2idx.items():
+            self.src_idx2word[val] = key
+        for key, val in self.tgt_word2idx.items():
+            self.tgt_idx2word[val] = key
         self.src_vocab_size = len(self.src_word2idx)
         self.tgt_vocab_size = len(self.tgt_word2idx)
 
