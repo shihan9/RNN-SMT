@@ -46,7 +46,7 @@ class Dataloader(object):
         self.src_vocab_size = len(self.src_word2idx)
         self.tgt_vocab_size = len(self.tgt_word2idx)
 
-    def next_batch(self, batch_size, num_epoch, shuffle=False):
+    def next_batch(self, batch_size, num_epoch, shuffle=True):
         idx_in_epoch = 0
         cur_epoch = 1
         indices = list(range(self.size))  # index of src and target
