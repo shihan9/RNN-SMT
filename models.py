@@ -65,7 +65,7 @@ class RNNsearch(object):
         assert self.phase == 'DEV'
         self.saver.restore(self.session, './model.ckpt')
         num_batch = total_loss = 0
-        for batch in self.data.next_batch(self.batch_size, 1):
+        for batch in self.data.next_batch(self.batch_size, self.num_epoch):
             tmp = self.session.run(
                 self.loss,
                 feed_dict={
@@ -83,7 +83,7 @@ class RNNsearch(object):
         assert self.phase == 'TEST'
         self.saver.restore(self.session, './model.ckpt')
         num_batch = total_dist = 0
-        for batch in self.data.next_batch(self.batch_size, 1):
+        for batch in self.data.next_batch(self.batch_size, self.num_epoch):
             if self.draw > 0:
                 tmp, attentions, predictions, distances = self.session.run(
                     [
@@ -143,7 +143,7 @@ class RNNsearch(object):
                 initial_state_fw=init_state_fw,
                 initial_state_bw=init_state_bw)
             encoder_outputs = tf.concat(bi_outputs, -1)
-            bw_first = bi_outputs[1][:, 0, :]
+            bw_first = final_state[1]
             return encoder_outputs, bw_first
 
     def _decoder(self, encoder_outputs, bw_first):
@@ -300,7 +300,7 @@ class RNNsearch(object):
                                  lambda: tf.zeros([self.batch_size, self.embed_size + 2 * self.rnn_size], dtype=tf.float32),
                                  lambda: tf.concat([embedded, context], -1))
 
-            # next_loop_state[1] is equal the finished vector maintained in raw_rnn,
+            # next_loop_state[1] is the same as the finished vector maintained in raw_rnn,
             # so the attentions we generated has the same generated_tgt_max_time as sample_ids
             next_loop_state[1] = tf.logical_or(elements_finished,
                                                next_loop_state[1])
@@ -374,7 +374,7 @@ class RNNencdec(object):
         assert self.phase == 'DEV'
         self.saver.restore(self.session, './model.ckpt')
         num_batch = total_loss = 0
-        for batch in self.data.next_batch(self.batch_size, 1):
+        for batch in self.data.next_batch(self.batch_size, self.num_epoch):
             tmp, _, _, _ = self.session.run(
                 self.loss,
                 feed_dict={
@@ -392,7 +392,7 @@ class RNNencdec(object):
         assert self.phase == 'TEST'
         self.saver.restore(self.session, './model.ckpt')
         num_batch = total_dist = 0
-        for batch in self.data.next_batch(self.batch_size, 1):
+        for batch in self.data.next_batch(self.batch_size, self.num_epoch):
             tmp = self.session.run(
                 self.distance,
                 feed_dict={

@@ -35,7 +35,7 @@ def draw_attentions(num_draw, src_table, tgt_table, src_idx, tgt_idx, attentions
             plt.xticks(range(tgt_len), [tgt_table[x].decode('utf-8') for x in tgt], rotation=90)
             plt.yticks(range(src_len), [src_table[y].decode('utf-8') for y in src])
             plt.gca().xaxis.tick_top()
-            plt.savefig(str(num_draw) + '.png', bbox_inches='tight')
+            plt.savefig('data/pics/' + str(num_draw) + '.png', bbox_inches='tight')
             num_draw -= 1
 
     return num_draw
