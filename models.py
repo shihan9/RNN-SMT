@@ -483,7 +483,7 @@ class RNNencdec(object):
                     impute_finished=True)
                 sample_ids = outputs.sample_id
 
-                distance = edit_distance(sample_ids, self.tgt_labels,
-                                         self.tgt_seqlen)
+                distance, _ = edit_distance(
+                    sample_ids, self.tgt_labels, self.tgt_seqlen)
 
             return loss, trainer, distance
