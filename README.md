@@ -1,24 +1,20 @@
 ## About
 
-This is the final project of Deep Learning (CS2470, Fall 2017) at Brown University replicating the paper proposed by [Bahdanau *et al*. (2014)][1]. We will implement two models, which are RNNencdec and RNNsearch. We try to reproduce the results of this paper but will make some changes to the datasets and evaluation methods.
+This is the final project of Deep Learning (CS2470, Fall 2017) at Brown University replicating the paper proposed by [Bahdanau *et al*. (2014)][1]. We implemented RNNencdec and RNNsearch and compared their performance in machine translation mesured by edit distance.
 
 ## Data
 
-Training Data: bitexts.selected Development Data: dev.ntst1213 Test Data: dev.ntst14
+Hansard
 
-see files [here](http://www-lium.univ-lemans.fr/~schwenk/cslm_joint_paper/README)
+## Results
 
-## Preprocess
-
-Pick 30,000 most frequent words in each language as vocabularies to train models and others are marked as 'UNK'.
-
-
+![Edit Distance `<=` 1](./results/result1.png)
+![Edit Distance `>=` 5](./results/result2.png)
+![Edit Distance](./results/result3.png)
 
 ## Group Members
 
 @shihan9
 @baichuan55555
-@liefatou
-
 
 [1]: https://arxiv.org/abs/1409.0473
